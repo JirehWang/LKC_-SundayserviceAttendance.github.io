@@ -5,5 +5,5 @@
  * 取得方式：GAS 編輯器 → 部署 → 管理部署 → 複製網址
  */
 window.GAS_CONFIG = {
-  apiUrl: 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec',
+  apiUrl: 'https://script.google.com/macros/s/AKfycbyJbzjHIeFFRbqT-Ttk2OAPYfF-qDKYES8dJiu4sJCR4t2Fq9PTtbALwuiJDBxh55kR/exec',
 };
