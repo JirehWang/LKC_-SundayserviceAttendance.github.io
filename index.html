@@ -216,19 +216,22 @@
       document.getElementById('page-ATTENDANCE').style.display = 'block';
 
       loadPageContent('ATTENDANCE', 'attendance').then(() => {
-        let retryCount = 0;
-        let checkInterval = setInterval(() => {
-          retryCount++;
-          const isConfigLoaded = (typeof globalGroupConfig !== 'undefined' && Object.keys(globalGroupConfig).length > 0);
-          if (typeof loadGroupConfig === "function" && isConfigLoaded) {
-            clearInterval(checkInterval);
-            loadGroupConfig(initCat, initGrp);
-          }
-          if (retryCount > 50) {
-            clearInterval(checkInterval);
-            console.warn("⚠️ 自動跳轉逾時");
-          }
-        }, 200);
+        // ⏳ 等待子頁面 script 完全載入
+        setTimeout(() => {
+          let retryCount = 0;
+          let checkInterval = setInterval(() => {
+            retryCount++;
+            const isConfigLoaded = (typeof globalGroupConfig !== 'undefined' && Object.keys(globalGroupConfig).length > 0);
+            if (typeof loadGroupConfig === "function" && isConfigLoaded) {
+              clearInterval(checkInterval);
+              loadGroupConfig(initCat, initGrp);
+            }
+            if (retryCount > 50) {
+              clearInterval(checkInterval);
+              console.warn("⚠️ 自動跳轉逾時");
+            }
+          }, 200);
+        }, 1000); // 延遲 1 秒讓子頁面完全載入
       });
     }
   };
