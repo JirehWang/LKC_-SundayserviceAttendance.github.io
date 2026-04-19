@@ -1,85 +1,71 @@
 /**
- * api.js — GAS Web App 橋接層
- * 
- * 原本 GAS 使用 google.script.run.withSuccessHandler(cb).functionName(args)
- * 這裡把每個後端函式包裝成 async function，讓前端代碼改動最小化。
- * 
- * 使用前：在 config.js 設定正確的 GAS_API_URL
+ * api.js - GAS API 橋接層
+ * 模擬 google.script.run 語法，底層改用 fetch 呼叫 GAS Web App
  */
 
-const GAS_API_URL = window.GAS_CONFIG?.apiUrl || '';
-
-/**
- * 核心 HTTP 呼叫函式
- * @param {string} action - 對應 GAS 後端的函式名稱
- * @param {any} payload - 傳入參數
- * @returns {Promise<any>} - 後端回傳的資料
- */
-async function callGAS(action, payload = null) {
-  if (!GAS_API_URL) {
-    throw new Error('尚未設定 GAS API URL，請確認 config.js');
-  }
-
-  const body = { action };
-  if (payload !== null) body.payload = payload;
-
-  const response = await fetch(GAS_API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' }, // GAS 需要 text/plain 才能讀到 postData
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) throw new Error('HTTP 錯誤：' + response.status);
-
-  const result = await response.json();
-  if (result.error) throw new Error(result.error);
-  return result.data !== undefined ? result.data : result;
+// 確保 config.js 已載入
+if (typeof window.GAS_CONFIG === 'undefined') {
+  console.error('❌ 找不到 config.js，請確認 config.js 已正確載入');
 }
 
 /**
- * google.script.run 模擬器
- * 
- * 用法與原本 GAS 前端完全相同：
- *   google.script.run
- *     .withSuccessHandler(cb)
- *     .withFailureHandler(errCb)
- *     .functionName(arg1, arg2)
+ * 模擬 google.script.url.getLocation
  */
 const google = {
   script: {
-    run: new Proxy({}, {
-      get(_, functionName) {
-        // 回傳一個物件，支援鏈式呼叫 .withSuccessHandler().withFailureHandler()
-        const runner = {
-          _success: null,
-          _failure: null,
-          withSuccessHandler(cb) { this._success = cb; return this; },
-          withFailureHandler(cb) { this._failure = cb; return this; },
-        };
-
-        // 再一層 Proxy，當真正呼叫函式名稱時執行 API
-        return new Proxy(runner, {
-          get(target, prop) {
-            if (prop in target) return target[prop].bind(target);
-            // 如果是函式名稱，回傳一個會發出請求的函式
-            return (...args) => {
-              const payload = args.length === 0 ? null : (args.length === 1 ? args[0] : args);
-              callGAS(functionName, payload)
-                .then(data => { if (target._success) target._success(data); })
-                .catch(err => { if (target._failure) target._failure(err); else console.error('[GAS API Error]', functionName, err); });
-            };
-          }
-        });
-      }
-    }),
-
-    // google.script.url.getLocation 模擬：從瀏覽器 URL 參數讀取
     url: {
-      getLocation(callback) {
+      getLocation: function(callback) {
         const params = {};
         new URLSearchParams(window.location.search).forEach((v, k) => { params[k] = v; });
         callback({ parameter: params });
       }
-    }
+    },
+    run: new Proxy({}, {
+      get(_, functionName) {
+        let successHandler = null;
+        let failureHandler = (err) => console.error('GAS Error:', err);
+
+        const runner = {
+          withSuccessHandler(fn) {
+            successHandler = fn;
+            return runner;
+          },
+          withFailureHandler(fn) {
+            failureHandler = fn;
+            return runner;
+          }
+        };
+
+        // 動態產生每個函式名稱對應的呼叫
+        runner[functionName] = function(...args) {
+          const apiUrl = window.GAS_CONFIG && window.GAS_CONFIG.apiUrl;
+          if (!apiUrl || apiUrl.includes('YOUR_SCRIPT_ID')) {
+            const errMsg = '❌ 請先設定 config.js 中的 GAS Web App URL！';
+            console.error(errMsg);
+            if (failureHandler) failureHandler(new Error(errMsg));
+            return;
+          }
+
+          fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: functionName, payload: args.length === 1 ? args[0] : args })
+          })
+          .then(res => res.json())
+          .then(data => {
+            if (data.error) {
+              if (failureHandler) failureHandler(new Error(data.error));
+            } else {
+              if (successHandler) successHandler(data.data);
+            }
+          })
+          .catch(err => {
+            if (failureHandler) failureHandler(err);
+          });
+        };
+
+        return runner;
+      }
+    })
   }
 };
