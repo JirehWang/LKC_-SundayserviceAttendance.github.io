@@ -68,8 +68,6 @@
       border: 1px solid #eee;
     }
     .page-section { display: none; }
-
-    /* 頁面載入動畫 */
     #page-loading {
       display: flex;
       align-items: center;
@@ -121,30 +119,28 @@
 
   </div>
 
-  <!-- 設定檔與 API 橋接層（必須最先載入） -->
+  <!-- 設定檔與 API 橋接層 -->
   <script src="config.js"></script>
   <script src="api.js"></script>
 
 <script>
   var autoJumpConfig = { cat: null, grp: null, active: false };
-
-  // 子頁面是否已載入過（避免重複 fetch）
   var pageLoaded = { ATTENDANCE: false, MEMBERS: false, STATS: false, TREND_CHART: false };
 
   /**
-   * 動態載入子頁面 HTML（取代 GAS 的 <?!= include('xxx') ?>）
+   * 動態載入子頁面 HTML
+   * ✅ 已修改：拿掉 pages/ 前綴，直接從根目錄讀取
    */
   async function loadPageContent(pageId, filename) {
     if (pageLoaded[pageId]) return;
     const container = document.getElementById('page-' + pageId);
     container.innerHTML = '<div id="page-loading"><div class="spinner-border text-primary me-3"></div> 載入中...</div>';
     try {
-      const res = await fetch('pages/' + filename + '.html');
-      if (!res.ok) throw new Error('找不到 pages/' + filename + '.html');
+      const res = await fetch(filename + '.html');
+      if (!res.ok) throw new Error('找不到 ' + filename + '.html');
       container.innerHTML = await res.text();
       pageLoaded[pageId] = true;
 
-      // 執行頁面內的 script 標籤
       container.querySelectorAll('script').forEach(oldScript => {
         const newScript = document.createElement('script');
         if (oldScript.src) {
@@ -205,38 +201,36 @@
   window.onload = function() {
     if (typeof initializeApp === "function") initializeApp();
 
-    // 解析網址參數並執行自動跳轉（取代 google.script.url.getLocation）
-    google.script.url.getLocation(function(location) {
-      const params = location.parameter;
-      const initCat = params.cat;
-      const initGrp = params.grp;
+    // ✅ 已修改：直接從瀏覽器網址讀取參數，取代 google.script.url.getLocation
+    const params = new URLSearchParams(window.location.search);
+    const initCat = params.get('cat');
+    const initGrp = params.get('grp');
 
-      if (initCat && initGrp) {
-        console.log("🚀 偵測到跳轉指令：", initCat, initGrp);
-        autoJumpConfig.cat = initCat;
-        autoJumpConfig.grp = initGrp;
-        autoJumpConfig.active = true;
+    if (initCat && initGrp) {
+      console.log("🚀 偵測到跳轉指令：", initCat, initGrp);
+      autoJumpConfig.cat = initCat;
+      autoJumpConfig.grp = initGrp;
+      autoJumpConfig.active = true;
 
-        prepareContentArea();
-        document.getElementById('page-ATTENDANCE').style.display = 'block';
+      prepareContentArea();
+      document.getElementById('page-ATTENDANCE').style.display = 'block';
 
-        loadPageContent('ATTENDANCE', 'attendance').then(() => {
-          let retryCount = 0;
-          let checkInterval = setInterval(() => {
-            retryCount++;
-            const isConfigLoaded = (typeof globalGroupConfig !== 'undefined' && Object.keys(globalGroupConfig).length > 0);
-            if (typeof loadGroupConfig === "function" && isConfigLoaded) {
-              clearInterval(checkInterval);
-              loadGroupConfig(initCat, initGrp);
-            }
-            if (retryCount > 50) {
-              clearInterval(checkInterval);
-              console.warn("⚠️ 自動跳轉逾時");
-            }
-          }, 200);
-        });
-      }
-    });
+      loadPageContent('ATTENDANCE', 'attendance').then(() => {
+        let retryCount = 0;
+        let checkInterval = setInterval(() => {
+          retryCount++;
+          const isConfigLoaded = (typeof globalGroupConfig !== 'undefined' && Object.keys(globalGroupConfig).length > 0);
+          if (typeof loadGroupConfig === "function" && isConfigLoaded) {
+            clearInterval(checkInterval);
+            loadGroupConfig(initCat, initGrp);
+          }
+          if (retryCount > 50) {
+            clearInterval(checkInterval);
+            console.warn("⚠️ 自動跳轉逾時");
+          }
+        }, 200);
+      });
+    }
   };
 </script>
 </body>
