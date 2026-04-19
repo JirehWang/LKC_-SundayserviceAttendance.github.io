@@ -11,7 +11,7 @@ if (typeof window.GAS_CONFIG === 'undefined') {
 /**
  * 模擬 google.script.url.getLocation
  */
-const google = {
+window.google = {
   script: {
     url: {
       getLocation: function(callback) {
