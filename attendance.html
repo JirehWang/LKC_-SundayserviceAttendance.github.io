@@ -635,8 +635,9 @@
     ctx.font = 'bold 36px "Microsoft JhengHei"';
     ctx.fillText(grp + ' 點名處', 200, 130);
   
-    // ✅ 直接用 GitHub Pages URL，不經過 GAS
-    const finalUrl = "https://jirehwang.github.io/LKC_-SundayserviceAttendance.github.io/?cat=" + encodeURIComponent(cat) + "&grp=" + encodeURIComponent(grp);
+    // ✅ 加上時間戳記，強制瀏覽器視為全新請求
+    const timestamp = Date.now();
+    const finalUrl = "https://jirehwang.github.io/LKC_-SundayserviceAttendance.github.io/?cat=" + encodeURIComponent(cat) + "&grp=" + encodeURIComponent(grp) + "&v=" + timestamp;
     
     const qr = new QRious({ value: finalUrl, size: 300, level: 'H' });
     ctx.drawImage(qr.canvas, 50, 180, 300, 300);
