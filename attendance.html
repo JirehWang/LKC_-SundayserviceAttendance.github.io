@@ -638,12 +638,12 @@
     ctx.fillText('林口長老教會', 200, 80);
     ctx.font = 'bold 36px "Microsoft JhengHei"';
     ctx.fillText(grp + ' 點名處', 200, 130);
-    const baseUrl = window.GAS_CONFIG?.apiUrl || '';
-    if (!baseUrl || baseUrl.includes('YOUR_SCRIPT_ID')) {
-      alert("❌ 請先設定 config.js 的 GAS URL！");
-      return;
-    }
-    const finalUrl = baseUrl + "?cat=" + encodeURIComponent(cat) + "&grp=" + encodeURIComponent(grp);
+  
+    // ✅ 改：用 GitHub Pages 網址 + GAS 跳轉 URL
+    const githubUrl = "https://jirehwang.github.io/LKC_-SundayserviceAttendance.github.io/";
+    const gasExecUrl = window.GAS_CONFIG?.apiUrl || "";
+    const finalUrl = gasExecUrl + "?cat=" + encodeURIComponent(cat) + "&grp=" + encodeURIComponent(grp);
+    
     const qr = new QRious({ value: finalUrl, size: 300, level: 'H' });
     ctx.drawImage(qr.canvas, 50, 180, 300, 300);
     ctx.fillStyle = '#7f8c8d';
