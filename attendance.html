@@ -528,6 +528,7 @@ function executeRevoke(name) {
             }
             // 更新 localPendingActions 防止輪詢蓋回去
             localPendingActions[name] = { time: Date.now(), state: false };
+            alert("✅ 撤銷成功！");
             // 更新出席人數
             var submittedCards = container.querySelectorAll('.att-item.submitted').length;
             var maleEl = document.getElementById('newFriendsMale');
