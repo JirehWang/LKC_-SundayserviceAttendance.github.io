@@ -501,19 +501,47 @@
     if (confirm("確定要撤銷 [" + name + "] 的送出紀錄嗎？")) { executeRevoke(name); }
   }
 
-  function executeRevoke(name) {
-    attIsRendering = true;
+function executeRevoke(name) {
     var btn = document.getElementById('submitBtn');
     var originalText = "確認送出";
     if (btn) { btn.disabled = true; btn.innerHTML = '正在撤銷...'; }
     google.script.run.withSuccessHandler(function(msg) {
-        if (msg === "OK") { localPendingActions[name] = { time: Date.now(), state: true }; alert("✅ 撤銷成功！"); } 
-        else { alert(msg); }
+        if (msg === "OK") {
+            // 直接把該卡片改成白色未勾選狀態
+            var container = document.getElementById('attendanceListBody');
+            var checkbox = container.querySelector('input[value="' + name + '"]');
+            if (checkbox) {
+                var card = checkbox.parentElement;
+                card.className = "att-item shadow-sm";
+                card.style.opacity = "1";
+                card.style.pointerEvents = "auto";
+                checkbox.checked = false;
+                checkbox.disabled = false;
+                var nameDiv = card.querySelector('.att-name');
+                if (nameDiv) nameDiv.innerHTML = name;
+                card.onclick = function(e) {
+                    e.preventDefault();
+                    var cb = this.querySelector('input');
+                    cb.checked = !cb.checked;
+                    toggleCardStyle(cb);
+                };
+            }
+            // 更新 localPendingActions 防止輪詢蓋回去
+            localPendingActions[name] = { time: Date.now(), state: false };
+            // 更新出席人數
+            var submittedCards = container.querySelectorAll('.att-item.submitted').length;
+            var maleEl = document.getElementById('newFriendsMale');
+            var femaleEl = document.getElementById('newFriendsFemale');
+            var nfMale = maleEl ? parseInt(maleEl.value) || 0 : 0;
+            var nfFemale = femaleEl ? parseInt(femaleEl.value) || 0 : 0;
+            var presentEl = document.getElementById('presentCount');
+            if (presentEl) presentEl.innerText = submittedCards + nfMale + nfFemale;
+        } else {
+            alert(msg);
+        }
         if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
-        attIsRendering = false; 
-        switchType(currentAttType); 
     }).revokeAttendance(name, currentAttType, attUserId);
-  }
+}
 
   function fetchRemoteStatus() {
     var searchInput = document.getElementById('attSearchInput');
