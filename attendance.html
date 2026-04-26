@@ -11,11 +11,7 @@
     box-sizing: border-box;
   }
  /* 調整姓名框大小 */
-  #attendanceListBody {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(18%, 60px), 1fr));/*每個方塊寬度是容器的 22%（所以一行約 4 個）,最小寬度 60px*/
-    gap: clamp(6px, 1.5%, 12px);/*高度在 60px ~ 85px 之間自動伸縮*/
-  }
+  #attendanceListBody { display: grid; grid-template-columns: repeat (auto-fill, minmax (min(22%, 70px), 1fr)); gap: 8px; }
 
   .att-item {
     background: white;
