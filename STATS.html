@@ -59,7 +59,7 @@
       </div>
       <div class="col-7">
         <label class="small text-muted fw-bold mb-1">📌 選擇群組</label>
-        <select id="statsGroupSelect" class="form-select form-select-sm fw-bold border-primary text-primary shadow-sm" onchange="fetchStatsData()">
+        <select id="statsGroupSelect" class="form-select form-select-sm fw-bold border-primary text-primary shadow-sm">
           <option value="" disabled selected>載入中...</option>
         </select>
       </div>
@@ -222,6 +222,7 @@
         grpSelect.add(opt);
       });
     }
+    document.getElementById('statsTableBody').innerHTML = '<tr><td colspan="4" class="text-center p-5 text-muted">請選擇條件後按「開始查詢」</td></tr>';
   }
 
   function toggleStatMode(mode) {
