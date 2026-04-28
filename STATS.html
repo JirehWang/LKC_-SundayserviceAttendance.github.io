@@ -73,6 +73,12 @@
         <button class="btn btn-success btn-sm w-100 fw-bold shadow-sm" onclick="exportToCSV()">📥 匯出 Excel</button>
       </div>
     </div>
+
+    <div class="row g-2 mt-2" id="trendAnalysisRow">
+      <div class="col-12">
+        <button class="btn btn-warning btn-sm w-100 fw-bold shadow-sm" onclick="openTrendModal()">📈📉 出席頻率變化分析</button>
+      </div>
+    </div>
     
     <div class="row g-2 mt-2">
       <div class="col-12">
@@ -127,6 +133,30 @@
         <tr><td colspan="4" class="text-center p-5 text-muted">正在載入選單...</td></tr>
       </tbody>
     </table>
+  </div>
+</div>
+
+<!-- 頻率變化分析 Modal -->
+<div id="trendModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.5); align-items:center; justify-content:center;">
+  <div style="background:#fff; border-radius:12px; width:92%; max-width:540px; max-height:88vh; overflow-y:auto; padding:20px; position:relative;">
+    <button onclick="closeTrendModal()" style="position:absolute;top:12px;right:14px;border:none;background:none;font-size:18px;cursor:pointer;">✕</button>
+    <h5 class="fw-bold mb-1">📈📉 出席頻率變化分析</h5>
+    <div class="text-muted small mb-3" id="trendSubtitle"></div>
+
+    <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+      <label class="small fw-bold text-muted mb-0">變化門檻</label>
+      <div class="input-group input-group-sm" style="width:90px;">
+        <input type="number" id="trendDropThreshold" class="form-control" value="50" min="1" max="100">
+        <span class="input-group-text">%</span>
+      </div>
+      <button class="btn btn-sm btn-outline-secondary fw-bold" onclick="applyTrendFilter()">重新篩選</button>
+    </div>
+
+    <div id="trendLoading" style="display:none;" class="text-center py-4">
+      <div class="spinner-border text-warning"></div>
+      <div class="small text-muted mt-2">演算法分析中...</div>
+    </div>
+    <div id="trendResult"></div>
   </div>
 </div>
 
@@ -209,6 +239,8 @@
     });
     const searchBox = document.getElementById('statsNameSearch');
     if (searchBox) searchBox.value = '';
+    const trendRow = document.getElementById('trendAnalysisRow');
+    if (trendRow) trendRow.style.display = mode === 'range' ? '' : 'none';
   }
 
   function getNextDayString(dateStr) {
@@ -341,6 +373,8 @@
     }
     tbody.innerHTML = html;
     filterStatsTable();
+    const trendRow = document.getElementById('trendAnalysisRow');
+    if (trendRow) trendRow.style.display = currentMode === 'range' ? '' : 'none';
   }
 
   function filterStatsTable() {
@@ -399,5 +433,138 @@
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  }
+
+  // ===== 以下為出席頻率變化分析新功能 =====
+
+  let trendRawData = null;
+
+  function openTrendModal() {
+    if (!currentStatsData) return alert("請先查詢");
+    document.getElementById('trendModal').style.display = 'flex';
+    runTrendAnalysis();
+  }
+
+  function closeTrendModal() {
+    document.getElementById('trendModal').style.display = 'none';
+  }
+
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeTrendModal(); });
+
+  function runTrendAnalysis() {
+    const catSelect = document.getElementById('statsCategorySelect');
+    const grpSelect = document.getElementById('statsGroupSelect');
+    const start = document.getElementById('statsStart').value;
+    const end = document.getElementById('statsEnd').value;
+    if (!start || !end || !grpSelect || !grpSelect.value) return;
+
+    document.getElementById('trendLoading').style.display = 'block';
+    document.getElementById('trendResult').innerHTML = '';
+    document.getElementById('trendSubtitle').innerHTML = '';
+
+    const req = {
+      type: grpSelect.value,
+      start: start,
+      end: getNextDayString(end),
+      baseSheet: document.getElementById('baseSheetSource').value || '會友名單',
+      targetGroups: grpSelect.value.indexOf('合計') !== -1
+        ? (globalStatsGroupConfig[catSelect.value] || []) : []
+    };
+
+    google.script.run
+      .withFailureHandler(function(err) {
+        document.getElementById('trendLoading').style.display = 'none';
+        document.getElementById('trendResult').innerHTML =
+          `<div class="text-danger small p-3">錯誤：${err.message}</div>`;
+      })
+      .withSuccessHandler(function(data) {
+        trendRawData = data;
+        document.getElementById('trendLoading').style.display = 'none';
+        applyTrendFilter();
+      })
+      .getAttendanceTrend(req);
+  }
+
+  function applyTrendFilter() {
+    if (!trendRawData) return;
+    const threshold = parseInt(document.getElementById('trendDropThreshold').value) || 50;
+    renderTrendResult(trendRawData, threshold);
+  }
+
+  function renderTrendResult(data, threshold) {
+    const subtitle = document.getElementById('trendSubtitle');
+    subtitle.innerHTML =
+      `🔍 最佳分割點由演算法自動偵測　` +
+      `前段：<b>${data.periodA}</b>（${data.sessionsA} 場）　` +
+      `後段：<b>${data.periodB}</b>（${data.sessionsB} 場）`;
+
+    const dropped = (data.details || []).filter(function(r) { return r.changeRate <= -threshold; });
+    const risen   = (data.details || []).filter(function(r) { return r.changeRate >= threshold; });
+
+    dropped.sort(function(a, b) { return a.changeRate - b.changeRate; });
+    risen.sort(function(a, b) { return b.changeRate - a.changeRate; });
+
+    const container = document.getElementById('trendResult');
+    let html = '';
+
+    function buildSection(list, isRise) {
+      if (list.length === 0) {
+        return `<div class="text-muted small text-center py-2">無符合會友</div>`;
+      }
+      return list.map(function(r) {
+        const gender = r.gender || '-';
+        const gColor = gender === '男' ? '#0d6efd' : (gender === '女' ? '#dc3545' : '#888');
+        const barA = Math.min(100, Math.round(r.rateA));
+        const barB = Math.min(100, Math.round(r.rateB));
+        const changePct = Math.abs(Math.round(r.changeRate));
+        const badgeColor = isRise ? '#198754' : '#dc3545';
+        const arrow = isRise ? '↑' : '↓';
+        const cardBg = isRise ? '#f2faf5' : '#fffdf2';
+
+        return `
+        <div style="border:1px solid #dee2e6; border-radius:8px; padding:10px 12px; margin-bottom:10px; background:${cardBg};">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="fw-bold" style="font-size:0.95rem;">${r.name}
+              <span style="color:${gColor}; font-size:0.8rem; margin-left:4px;">${gender}</span>
+            </span>
+            <span class="badge" style="background:${badgeColor}; font-size:0.8rem;">${arrow} ${changePct}%</span>
+          </div>
+          <div class="d-flex align-items-center mb-1" style="gap:8px; font-size:0.78rem; color:#666;">
+            <span style="width:26px;">前段</span>
+            <div style="flex:1; background:#e9ecef; border-radius:4px; height:8px;">
+              <div style="width:${barA}%; background:#0d6efd; height:8px; border-radius:4px;"></div>
+            </div>
+            <span style="width:40px; text-align:right; color:#0d6efd; font-weight:600;">${r.rateA}%</span>
+          </div>
+          <div class="d-flex align-items-center" style="gap:8px; font-size:0.78rem; color:#666;">
+            <span style="width:26px;">後段</span>
+            <div style="flex:1; background:#e9ecef; border-radius:4px; height:8px;">
+              <div style="width:${barB}%; background:${badgeColor}; height:8px; border-radius:4px;"></div>
+            </div>
+            <span style="width:40px; text-align:right; font-weight:600; color:${badgeColor};">${r.rateB}%</span>
+          </div>
+          <div style="font-size:0.75rem; color:#888; margin-top:5px;">
+            前段出席 ${r.countA}/${data.sessionsA} 場　後段出席 ${r.countB}/${data.sessionsB} 場
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    html += `
+    <div class="mb-2">
+      <div class="fw-bold mb-1" style="color:#dc3545; font-size:0.88rem;">
+        📉 出席減少（變化 ≥ ${threshold}%）　<span class="text-muted fw-normal">${dropped.length} 人</span>
+      </div>
+      ${buildSection(dropped, false)}
+    </div>
+    <hr class="my-3">
+    <div>
+      <div class="fw-bold mb-1" style="color:#198754; font-size:0.88rem;">
+        📈 出席增加（變化 ≥ ${threshold}%）　<span class="text-muted fw-normal">${risen.length} 人</span>
+      </div>
+      ${buildSection(risen, true)}
+    </div>`;
+
+    container.innerHTML = html;
   }
 </script>
