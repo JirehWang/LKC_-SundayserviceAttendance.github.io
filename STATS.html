@@ -59,7 +59,7 @@
       </div>
       <div class="col-7">
         <label class="small text-muted fw-bold mb-1">📌 選擇群組</label>
-        <select id="statsGroupSelect" class="form-select form-select-sm fw-bold border-primary text-primary shadow-sm">
+        <select id="statsGroupSelect" class="form-select form-select-sm fw-bold border-primary text-primary shadow-sm" onchange="fetchStatsData()">
           <option value="" disabled selected>載入中...</option>
         </select>
       </div>
@@ -74,7 +74,7 @@
       </div>
     </div>
 
-    <div class="row g-2 mt-2" id="trendAnalysisRow">
+    <div class="row g-2 mt-2" id="trendAnalysisRow" style="display:none;">
       <div class="col-12">
         <button class="btn btn-warning btn-sm w-100 fw-bold shadow-sm" onclick="openTrendModal()">📈📉 出席頻率變化分析</button>
       </div>
@@ -222,7 +222,7 @@
         grpSelect.add(opt);
       });
     }
-    document.getElementById('statsTableBody').innerHTML = '<tr><td colspan="4" class="text-center p-5 text-muted">請選擇條件後按「開始查詢」</td></tr>';
+    fetchStatsData();
   }
 
   function toggleStatMode(mode) {
@@ -241,7 +241,7 @@
     const searchBox = document.getElementById('statsNameSearch');
     if (searchBox) searchBox.value = '';
     const trendRow = document.getElementById('trendAnalysisRow');
-    if (trendRow) trendRow.style.display = mode === 'range' ? '' : 'none';
+    if (trendRow) trendRow.style.display = 'none';
   }
 
   function getNextDayString(dateStr) {
@@ -281,17 +281,21 @@
     }
     const tbody = document.getElementById('statsTableBody');
     tbody.innerHTML = '<tr><td colspan="4" class="text-center p-5"><div class="spinner-border text-primary mb-2"></div><div class="text-muted">正在分析數據...</div></td></tr>';
+    const btn = document.querySelector('button[onclick="fetchStatsData()"]');
+    if(btn) btn.disabled = true;
     currentStatsFetchId++;
     const myFetchId = currentStatsFetchId;
     google.script.run
       .withFailureHandler(function(err) {
           if (myFetchId !== currentStatsFetchId) return;
           tbody.innerHTML = `<tr><td colspan="4" class="text-center p-4 text-danger">錯誤<br><small>${err.message}</small></td></tr>`;
+          if(btn) btn.disabled = false;
       })
       .withSuccessHandler(function(data) {
           if (myFetchId !== currentStatsFetchId) return;
           currentStatsData = data;
           renderStatsTable(data);
+          if(btn) btn.disabled = false;
       })
       .getAttendanceStats(req);
   }
@@ -492,7 +496,6 @@
     const subtitle = document.getElementById('trendSubtitle');
     const minSessions = 4;
 
-    // 前後段場次不足時提示
     const warnA = data.sessionsA < minSessions ? `<span class="text-danger ms-1">（前段僅 ${data.sessionsA} 場，不足 ${minSessions} 場，結果不顯示）</span>` : '';
     const warnB = data.sessionsB < minSessions ? `<span class="text-danger ms-1">（後段僅 ${data.sessionsB} 場，不足 ${minSessions} 場，結果不顯示）</span>` : '';
     subtitle.innerHTML =
@@ -606,8 +609,7 @@
       csvRows.push(['出席增加', r.name, r.gender, r.rateA + '%', r.rateB + '%', '↑' + Math.abs(Math.round(r.changeRate)) + '%', r.countA + '/' + data.sessionsA, r.countB + '/' + data.sessionsB]);
     });
 
-    const csvString = "﻿" + csvRows.map(function(row) { return row.join(','); }).join('
-');
+    const csvString = "\uFEFF" + csvRows.map(function(row) { return row.join(','); }).join('\n');
     const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
