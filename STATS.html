@@ -150,6 +150,7 @@
         <span class="input-group-text">%</span>
       </div>
       <button class="btn btn-sm btn-outline-secondary fw-bold" onclick="applyTrendFilter()">重新篩選</button>
+      <button class="btn btn-sm btn-outline-success fw-bold ms-auto" onclick="exportTrendCSV()">📥 匯出 Excel</button>
     </div>
 
     <div id="trendLoading" style="display:none;" class="text-center py-4">
@@ -488,10 +489,22 @@
 
   function renderTrendResult(data, threshold) {
     const subtitle = document.getElementById('trendSubtitle');
+    const minSessions = 4;
+
+    // 前後段場次不足時提示
+    const warnA = data.sessionsA < minSessions ? `<span class="text-danger ms-1">（前段僅 ${data.sessionsA} 場，不足 ${minSessions} 場，結果不顯示）</span>` : '';
+    const warnB = data.sessionsB < minSessions ? `<span class="text-danger ms-1">（後段僅 ${data.sessionsB} 場，不足 ${minSessions} 場，結果不顯示）</span>` : '';
     subtitle.innerHTML =
       `🔍 最佳分割點由演算法自動偵測　` +
-      `前段：<b>${data.periodA}</b>（${data.sessionsA} 場）　` +
-      `後段：<b>${data.periodB}</b>（${data.sessionsB} 場）`;
+      `前段：<b>${data.periodA}</b>（${data.sessionsA} 場）${warnA}　` +
+      `後段：<b>${data.periodB}</b>（${data.sessionsB} 場）${warnB}`;
+
+    const container = document.getElementById('trendResult');
+
+    if (data.sessionsA < minSessions || data.sessionsB < minSessions) {
+      container.innerHTML = `<div class="text-center text-muted py-4 small">前段或後段場次不足 ${minSessions} 場，無法進行可靠分析。<br>請擴大查詢區間後重試。</div>`;
+      return;
+    }
 
     const dropped = (data.details || []).filter(function(r) { return r.changeRate <= -threshold; });
     const risen   = (data.details || []).filter(function(r) { return r.changeRate >= threshold; });
@@ -499,7 +512,6 @@
     dropped.sort(function(a, b) { return a.changeRate - b.changeRate; });
     risen.sort(function(a, b) { return b.changeRate - a.changeRate; });
 
-    const container = document.getElementById('trendResult');
     let html = '';
 
     function buildSection(list, isRise) {
@@ -561,5 +573,47 @@
     </div>`;
 
     container.innerHTML = html;
+  }
+
+  function exportTrendCSV() {
+    if (!trendRawData) { alert("請先進行分析"); return; }
+    const threshold = parseInt(document.getElementById('trendDropThreshold').value) || 50;
+    const data = trendRawData;
+    const grpSelect = document.getElementById('statsGroupSelect');
+    const groupName = grpSelect ? grpSelect.value : '';
+    const start = document.getElementById('statsStart').value;
+    const end = document.getElementById('statsEnd').value;
+
+    let csvRows = [];
+    csvRows.push(['出席頻率變化分析']);
+    csvRows.push(['群組', groupName, '查詢區間', start + ' ~ ' + end]);
+    csvRows.push(['前段', data.periodA, '場次', data.sessionsA]);
+    csvRows.push(['後段', data.periodB, '場次', data.sessionsB]);
+    csvRows.push(['變化門檻', threshold + '%']);
+    csvRows.push([]);
+    csvRows.push(['類別', '姓名', '性別', '前段出席率', '後段出席率', '變化幅度', '前段場次', '後段場次']);
+
+    const dropped = (data.details || []).filter(function(r) { return r.changeRate <= -threshold; });
+    const risen   = (data.details || []).filter(function(r) { return r.changeRate >= threshold; });
+    dropped.sort(function(a, b) { return a.changeRate - b.changeRate; });
+    risen.sort(function(a, b) { return b.changeRate - a.changeRate; });
+
+    dropped.forEach(function(r) {
+      csvRows.push(['出席減少', r.name, r.gender, r.rateA + '%', r.rateB + '%', '↓' + Math.abs(Math.round(r.changeRate)) + '%', r.countA + '/' + data.sessionsA, r.countB + '/' + data.sessionsB]);
+    });
+    risen.forEach(function(r) {
+      csvRows.push(['出席增加', r.name, r.gender, r.rateA + '%', r.rateB + '%', '↑' + Math.abs(Math.round(r.changeRate)) + '%', r.countA + '/' + data.sessionsA, r.countB + '/' + data.sessionsB]);
+    });
+
+    const csvString = "﻿" + csvRows.map(function(row) { return row.join(','); }).join('
+');
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `頻率變化分析_${groupName}_${start}_${end}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 </script>
