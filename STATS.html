@@ -221,7 +221,6 @@
         grpSelect.add(opt);
       });
     }
-    fetchStatsData();
   }
 
   function toggleStatMode(mode) {
@@ -280,21 +279,17 @@
     }
     const tbody = document.getElementById('statsTableBody');
     tbody.innerHTML = '<tr><td colspan="4" class="text-center p-5"><div class="spinner-border text-primary mb-2"></div><div class="text-muted">正在分析數據...</div></td></tr>';
-    const btn = document.querySelector('button[onclick="fetchStatsData()"]');
-    if(btn) btn.disabled = true;
     currentStatsFetchId++;
     const myFetchId = currentStatsFetchId;
     google.script.run
       .withFailureHandler(function(err) {
           if (myFetchId !== currentStatsFetchId) return;
           tbody.innerHTML = `<tr><td colspan="4" class="text-center p-4 text-danger">錯誤<br><small>${err.message}</small></td></tr>`;
-          if(btn) btn.disabled = false;
       })
       .withSuccessHandler(function(data) {
           if (myFetchId !== currentStatsFetchId) return;
           currentStatsData = data;
           renderStatsTable(data);
-          if(btn) btn.disabled = false;
       })
       .getAttendanceStats(req);
   }
