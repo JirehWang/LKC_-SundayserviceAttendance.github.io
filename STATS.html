@@ -492,18 +492,18 @@
     renderTrendResult(trendRawData, threshold);
   }
 
-  function renderTrendResult(data, threshold) {
+function renderTrendResult(data, threshold) {
     const subtitle = document.getElementById('trendSubtitle');
 
     subtitle.innerHTML =
-      `🔍 綜合衰退指數分析（歷史長度最多一年 vs 近期三週）<br>` +
+      `🔍 綜合衰退指數分析（歷史長度最多一年 vs 近期八週）<br>` +
       `<span class="text-muted small">歷史：<b>${data.periodHistory}</b>（${data.sessionsHistory} 場）</span><br>` +
       `<span class="text-muted small">近期：<b>${data.periodRecent}</b>（${data.sessionsRecent} 場）</span>`;
 
     const container = document.getElementById('trendResult');
 
     if (data.sessionsRecent === 0) {
-      container.innerHTML = `<div class="text-center text-muted py-4 small">近期（三週內）無任何場次，無法進行分析。</div>`;
+      container.innerHTML = `<div class="text-center text-muted py-4 small">近期（八週內）無任何場次，無法進行分析。</div>`;
       return;
     }
 
@@ -529,6 +529,7 @@
         const badgeColor = '#dc3545';
         const arrow = '↓';
         const cardBg = '#fffdf2';
+        const warningHtml = r.missingThreeWeeks ? `<span class="text-danger fw-bold">${r.warningDesc}</span>` : '';
 
         return `
         <div style="border:1px solid #dee2e6; border-radius:8px; padding:10px 12px; margin-bottom:10px; background:${cardBg};">
@@ -552,8 +553,9 @@
             </div>
             <span style="width:40px; text-align:right; font-weight:600; color:${badgeColor};">${r.recentRate}%</span>
           </div>
-          <div style="font-size:0.75rem; color:#888; margin-top:5px; display:flex; justify-content:space-between;">
+          <div style="font-size:0.75rem; color:#888; margin-top:5px; display:flex; justify-content:space-between; align-items:center;">
             <span>目前已連續缺席 <b>${r.consecutiveMisses}</b> 場</span>
+            ${warningHtml}
           </div>
         </div>`;
       }).join('');
@@ -586,13 +588,13 @@
     csvRows.push(['近期區間', data.periodRecent, '場次', data.sessionsRecent]);
     csvRows.push(['衰退幅度門檻', threshold + '%']);
     csvRows.push([]);
-    csvRows.push(['類別', '姓名', '性別', '歷史出席率', '近期出席率', '衰退幅度', '連續缺席場數', '衰退指數']);
+    csvRows.push(['類別', '姓名', '性別', '歷史出席率', '近期出席率', '衰退幅度', '連續缺席場數', '衰退指數', '備註']);
 
     const dropped = (data.details || []).filter(function(r) { return r.rateDrop >= threshold && r.dropScore > 0; });
     dropped.sort(function(a, b) { return b.dropScore - a.dropScore; });
 
     dropped.forEach(function(r) {
-      csvRows.push(['出席減少', r.name, r.gender, r.historyRate + '%', r.recentRate + '%', r.rateDrop + '%', r.consecutiveMisses, r.dropScore]);
+      csvRows.push(['出席減少', r.name, r.gender, r.historyRate + '%', r.recentRate + '%', r.rateDrop + '%', r.consecutiveMisses, r.dropScore, r.warningDesc || '']);
     });
 
     const csvString = "\uFEFF" + csvRows.map(function(row) { return row.join(','); }).join('\n');
