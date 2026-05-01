@@ -144,9 +144,9 @@
     <div class="text-muted small mb-3" id="trendSubtitle"></div>
 
     <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-      <label class="small fw-bold text-muted mb-0">變化門檻</label>
+      <label class="small fw-bold text-muted mb-0">衰退幅度門檻</label>
       <div class="input-group input-group-sm" style="width:90px;">
-        <input type="number" id="trendDropThreshold" class="form-control" value="50" min="1" max="100">
+        <input type="number" id="trendDropThreshold" class="form-control" value="20" min="1" max="100">
         <span class="input-group-text">%</span>
       </div>
       <button class="btn btn-sm btn-outline-secondary fw-bold" onclick="applyTrendFilter()">重新篩選</button>
@@ -488,49 +488,47 @@
 
   function applyTrendFilter() {
     if (!trendRawData) return;
-    const threshold = parseInt(document.getElementById('trendDropThreshold').value) || 50;
+    const threshold = parseInt(document.getElementById('trendDropThreshold').value) || 20;
     renderTrendResult(trendRawData, threshold);
   }
 
   function renderTrendResult(data, threshold) {
     const subtitle = document.getElementById('trendSubtitle');
-    const minSessions = 4;
 
-    const warnA = data.sessionsA < minSessions ? `<span class="text-danger ms-1">（前段僅 ${data.sessionsA} 場，不足 ${minSessions} 場，結果不顯示）</span>` : '';
-    const warnB = data.sessionsB < minSessions ? `<span class="text-danger ms-1">（後段僅 ${data.sessionsB} 場，不足 ${minSessions} 場，結果不顯示）</span>` : '';
     subtitle.innerHTML =
-      `🔍 最佳分割點由演算法自動偵測　` +
-      `前段：<b>${data.periodA}</b>（${data.sessionsA} 場）${warnA}　` +
-      `後段：<b>${data.periodB}</b>（${data.sessionsB} 場）${warnB}`;
+      `🔍 綜合衰退指數分析（歷史長度最多一年 vs 近期三週）<br>` +
+      `<span class="text-muted small">歷史：<b>${data.periodHistory}</b>（${data.sessionsHistory} 場）</span><br>` +
+      `<span class="text-muted small">近期：<b>${data.periodRecent}</b>（${data.sessionsRecent} 場）</span>`;
 
     const container = document.getElementById('trendResult');
 
-    if (data.sessionsA < minSessions || data.sessionsB < minSessions) {
-      container.innerHTML = `<div class="text-center text-muted py-4 small">前段或後段場次不足 ${minSessions} 場，無法進行可靠分析。<br>請擴大查詢區間後重試。</div>`;
+    if (data.sessionsRecent === 0) {
+      container.innerHTML = `<div class="text-center text-muted py-4 small">近期（三週內）無任何場次，無法進行分析。</div>`;
       return;
     }
 
-    const dropped = (data.details || []).filter(function(r) { return r.changeRate <= -threshold; });
-    const risen   = (data.details || []).filter(function(r) { return r.changeRate >= threshold; });
+    const dropped = (data.details || []).filter(function(r) { 
+      return r.rateDrop >= threshold && r.dropScore > 0; 
+    });
 
-    dropped.sort(function(a, b) { return a.changeRate - b.changeRate; });
-    risen.sort(function(a, b) { return b.changeRate - a.changeRate; });
+    // 依衰退指數排序
+    dropped.sort(function(a, b) { return b.dropScore - a.dropScore; });
 
     let html = '';
 
-    function buildSection(list, isRise) {
+    function buildSection(list) {
       if (list.length === 0) {
         return `<div class="text-muted small text-center py-2">無符合會友</div>`;
       }
       return list.map(function(r) {
         const gender = r.gender || '-';
         const gColor = gender === '男' ? '#0d6efd' : (gender === '女' ? '#dc3545' : '#888');
-        const barA = Math.min(100, Math.round(r.rateA));
-        const barB = Math.min(100, Math.round(r.rateB));
-        const changePct = Math.abs(Math.round(r.changeRate));
-        const badgeColor = isRise ? '#198754' : '#dc3545';
-        const arrow = isRise ? '↑' : '↓';
-        const cardBg = isRise ? '#f2faf5' : '#fffdf2';
+        const barA = Math.min(100, Math.round(r.historyRate));
+        const barB = Math.min(100, Math.round(r.recentRate));
+        const changePct = Math.round(r.rateDrop);
+        const badgeColor = '#dc3545';
+        const arrow = '↓';
+        const cardBg = '#fffdf2';
 
         return `
         <div style="border:1px solid #dee2e6; border-radius:8px; padding:10px 12px; margin-bottom:10px; background:${cardBg};">
@@ -538,24 +536,24 @@
             <span class="fw-bold" style="font-size:0.95rem;">${r.name}
               <span style="color:${gColor}; font-size:0.8rem; margin-left:4px;">${gender}</span>
             </span>
-            <span class="badge" style="background:${badgeColor}; font-size:0.8rem;">${arrow} ${changePct}%</span>
+            <span class="badge" style="background:${badgeColor}; font-size:0.8rem;">${arrow} ${changePct}% (衰退指數: ${r.dropScore})</span>
           </div>
           <div class="d-flex align-items-center mb-1" style="gap:8px; font-size:0.78rem; color:#666;">
-            <span style="width:26px;">前段</span>
+            <span style="width:26px;">歷史</span>
             <div style="flex:1; background:#e9ecef; border-radius:4px; height:8px;">
               <div style="width:${barA}%; background:#0d6efd; height:8px; border-radius:4px;"></div>
             </div>
-            <span style="width:40px; text-align:right; color:#0d6efd; font-weight:600;">${r.rateA}%</span>
+            <span style="width:40px; text-align:right; color:#0d6efd; font-weight:600;">${r.historyRate}%</span>
           </div>
           <div class="d-flex align-items-center" style="gap:8px; font-size:0.78rem; color:#666;">
-            <span style="width:26px;">後段</span>
+            <span style="width:26px;">近期</span>
             <div style="flex:1; background:#e9ecef; border-radius:4px; height:8px;">
               <div style="width:${barB}%; background:${badgeColor}; height:8px; border-radius:4px;"></div>
             </div>
-            <span style="width:40px; text-align:right; font-weight:600; color:${badgeColor};">${r.rateB}%</span>
+            <span style="width:40px; text-align:right; font-weight:600; color:${badgeColor};">${r.recentRate}%</span>
           </div>
-          <div style="font-size:0.75rem; color:#888; margin-top:5px;">
-            前段出席 ${r.countA}/${data.sessionsA} 場　後段出席 ${r.countB}/${data.sessionsB} 場
+          <div style="font-size:0.75rem; color:#888; margin-top:5px; display:flex; justify-content:space-between;">
+            <span>目前已連續缺席 <b>${r.consecutiveMisses}</b> 場</span>
           </div>
         </div>`;
       }).join('');
@@ -564,16 +562,9 @@
     html += `
     <div class="mb-2">
       <div class="fw-bold mb-1" style="color:#dc3545; font-size:0.88rem;">
-        📉 出席減少（變化 ≥ ${threshold}%）　<span class="text-muted fw-normal">${dropped.length} 人</span>
+        📉 頻度突然降低（衰退幅度 ≥ ${threshold}%）　<span class="text-muted fw-normal">${dropped.length} 人</span>
       </div>
-      ${buildSection(dropped, false)}
-    </div>
-    <hr class="my-3">
-    <div>
-      <div class="fw-bold mb-1" style="color:#198754; font-size:0.88rem;">
-        📈 出席增加（變化 ≥ ${threshold}%）　<span class="text-muted fw-normal">${risen.length} 人</span>
-      </div>
-      ${buildSection(risen, true)}
+      ${buildSection(dropped)}
     </div>`;
 
     container.innerHTML = html;
@@ -581,7 +572,7 @@
 
   function exportTrendCSV() {
     if (!trendRawData) { alert("請先進行分析"); return; }
-    const threshold = parseInt(document.getElementById('trendDropThreshold').value) || 50;
+    const threshold = parseInt(document.getElementById('trendDropThreshold').value) || 20;
     const data = trendRawData;
     const grpSelect = document.getElementById('statsGroupSelect');
     const groupName = grpSelect ? grpSelect.value : '';
@@ -589,24 +580,19 @@
     const end = document.getElementById('statsEnd').value;
 
     let csvRows = [];
-    csvRows.push(['出席頻率變化分析']);
+    csvRows.push(['出席頻率變化分析 (衰退指數排序)']);
     csvRows.push(['群組', groupName, '查詢區間', start + ' ~ ' + end]);
-    csvRows.push(['前段', data.periodA, '場次', data.sessionsA]);
-    csvRows.push(['後段', data.periodB, '場次', data.sessionsB]);
-    csvRows.push(['變化門檻', threshold + '%']);
+    csvRows.push(['歷史區間', data.periodHistory, '場次', data.sessionsHistory]);
+    csvRows.push(['近期區間', data.periodRecent, '場次', data.sessionsRecent]);
+    csvRows.push(['衰退幅度門檻', threshold + '%']);
     csvRows.push([]);
-    csvRows.push(['類別', '姓名', '性別', '前段出席率', '後段出席率', '變化幅度', '前段場次', '後段場次']);
+    csvRows.push(['類別', '姓名', '性別', '歷史出席率', '近期出席率', '衰退幅度', '連續缺席場數', '衰退指數']);
 
-    const dropped = (data.details || []).filter(function(r) { return r.changeRate <= -threshold; });
-    const risen   = (data.details || []).filter(function(r) { return r.changeRate >= threshold; });
-    dropped.sort(function(a, b) { return a.changeRate - b.changeRate; });
-    risen.sort(function(a, b) { return b.changeRate - a.changeRate; });
+    const dropped = (data.details || []).filter(function(r) { return r.rateDrop >= threshold && r.dropScore > 0; });
+    dropped.sort(function(a, b) { return b.dropScore - a.dropScore; });
 
     dropped.forEach(function(r) {
-      csvRows.push(['出席減少', r.name, r.gender, r.rateA + '%', r.rateB + '%', '↓' + Math.abs(Math.round(r.changeRate)) + '%', r.countA + '/' + data.sessionsA, r.countB + '/' + data.sessionsB]);
-    });
-    risen.forEach(function(r) {
-      csvRows.push(['出席增加', r.name, r.gender, r.rateA + '%', r.rateB + '%', '↑' + Math.abs(Math.round(r.changeRate)) + '%', r.countA + '/' + data.sessionsA, r.countB + '/' + data.sessionsB]);
+      csvRows.push(['出席減少', r.name, r.gender, r.historyRate + '%', r.recentRate + '%', r.rateDrop + '%', r.consecutiveMisses, r.dropScore]);
     });
 
     const csvString = "\uFEFF" + csvRows.map(function(row) { return row.join(','); }).join('\n');
