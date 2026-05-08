@@ -279,7 +279,7 @@
     for (let cat in globalGroupConfig) {
       let opt = document.createElement('option');
       opt.value = cat;
-      opt.text = (cat === '禮拜' ? '⛪ ' : (cat === '主日學' ? '📖 ' : '📂 ')) + cat;
+      opt.text = (cat === '禮拜' ? '⛪ ' : (cat === '主日學' ? '📖 ' : (cat === '禱告會' ? '🛐' : '📂 '))) + cat;
       if (cat === targetCategory) opt.selected = true;
       catSelect.add(opt);
       if (modalCatSelect) {
